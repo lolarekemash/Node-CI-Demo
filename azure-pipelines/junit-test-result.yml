@@ -1,0 +1,71 @@
+# Node.js
+# Build a general Node.js project with npm.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  artifactName: 'drop'
+
+stages:
+  - stage: Build
+    displayName: 'Build Stage'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Publish Artifact'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '16.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install
+              npm run build
+            displayName: 'Build Node.js App'
+
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+              replaceExistingArchive: true
+            displayName: 'Archive Build Output'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: '$(artifactName)'
+              publishLocation: 'Container'
+            displayName: 'Publish Artifact'
+
+  - stage: Deploy
+    displayName: 'Deploy Stage'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: DeployJob
+        displayName: 'Deploy to Azure App Service'
+        steps:
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: '$(artifactName)'
+              downloadPath: '$(System.ArtifactsDirectory)'
+            displayName: 'Download Build Artifact'
+
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: 'ARM-connection-<lolaarekemase>'
+              appType: 'webAppLinux'
+              appName: 'LoliPopsApp' 
+              package: '$(System.ArtifactsDirectory)/$(artifactName)/app.zip'
+            displayName: 'Deploy to Azure App Service'
